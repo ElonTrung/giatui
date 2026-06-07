@@ -363,7 +363,9 @@ function updateConnectionStatus() {
   const dot = connectionStatus.querySelector('.status-dot');
   const text = connectionStatus.querySelector('.status-text');
   
-  if (config.appsScriptUrl) {
+  const profile = getActiveProfile();
+  
+  if (profile.appsScriptUrl) {
     dot.className = 'status-dot active';
     text.innerText = 'Đã kết nối Apps Script';
     credentialsStatusBox.style.display = 'none';
@@ -376,7 +378,7 @@ function updateConnectionStatus() {
     text.innerText = 'Thiếu credentials.json';
     credentialsStatusBox.className = 'status-box error';
     credentialsStatusBox.innerHTML = '<span class="material-symbols-outlined" style="color: var(--error)">error</span> <span>Không tìm thấy tệp credentials.json! Hãy kiểm tra thư mục dự án hoặc cấu hình Apps Script ở trên.</span>';
-  } else if (!config.sheetId) {
+  } else if (!profile.sheetId) {
     dot.className = 'status-dot warning';
     text.innerText = 'Chưa cấu hình Sheet ID';
     credentialsStatusBox.className = 'status-box warning';
@@ -466,7 +468,8 @@ async function runOcrScan() {
 
 // Fetch Dates list from Google Sheet columns
 async function fetchSheetDates() {
-  if (!config.sheetId) {
+  const profile = getActiveProfile();
+  if (!profile.sheetId && !profile.appsScriptUrl) {
     // If not connected, add placeholders for dates in dropdowns
     dateHeaders = [];
     populateDateSelectors(null, null);
@@ -603,8 +606,9 @@ function getTableData() {
    Google Sheets Export
    ========================================================================== */
 async function exportToGoogleSheet() {
-  if (!config.sheetId) {
-    showToast('Chưa cấu hình Google Sheet ID. Hãy cấu hình ở mục cài đặt.', 'error');
+  const profile = getActiveProfile();
+  if (!profile.sheetId && !profile.appsScriptUrl) {
+    showToast('Chưa cấu hình Google Sheet ID hoặc Apps Script URL cho cấu hình đang chọn.', 'error');
     return;
   }
   
