@@ -1,0 +1,7 @@
+node_modules/
+config.json
+credentials.json
+.env
+uploads/*
+!uploads/.gitkeep
+package-lock.json

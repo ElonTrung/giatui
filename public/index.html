@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Giat Ui - Số Hóa Phiếu Giao Nhận</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Material Symbols for Icons -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo-circle">
+          <span class="material-symbols-outlined">local_laundry_service</span>
+        </div>
+        <div class="brand-text">
+          <h1>GIẶT ỦI</h1>
+          <span>Số hóa phiếu giao nhận</span>
+        </div>
+      </div>
+      
+      <nav class="nav-menu">
+        <a href="#" class="nav-item active" data-target="panel-scan">
+          <span class="material-symbols-outlined">document_scanner</span>
+          <span>Quét Phiếu</span>
+        </a>
+        <a href="#" class="nav-item" data-target="panel-learn">
+          <span class="material-symbols-outlined">psychology</span>
+          <span>Dạy AI</span>
+        </a>
+        <a href="#" class="nav-item" data-target="panel-config">
+          <span class="material-symbols-outlined">settings</span>
+          <span>Cấu hình Sheets</span>
+        </a>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <div class="connection-status" id="sheets-connection">
+          <span class="status-dot warning"></span>
+          <span class="status-text">Đang kiểm tra kết nối...</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <main class="main-content">
+      
+      <!-- HEADER -->
+      <header class="top-header">
+        <div class="header-title">
+          <h2 id="page-title">Quét Phiếu Giao Nhận</h2>
+          <p id="page-subtitle">Tải ảnh chụp phiếu lên để AI tự động trích xuất bảng số liệu</p>
+        </div>
+      </header>
+
+      <!-- PANELS CONTAINER -->
+      <div class="panels-container">
+        
+        <!-- PANEL: SCAN & DIGITIZE -->
+        <section id="panel-scan" class="workspace-panel active">
+          <div class="scan-grid">
+            
+            <!-- Upload Column / Left Side -->
+            <div class="card upload-card">
+              <div class="card-header">
+                <h3>Tải ảnh phiếu lên</h3>
+              </div>
+              
+              <input type="file" id="file-input" accept="image/*" style="position: absolute; width: 0.1px; height: 0.1px; opacity: 0; overflow: hidden; z-index: -1;">
+              
+              <label class="upload-zone" id="drop-zone" for="file-input">
+                <div class="upload-prompt" id="upload-prompt-view">
+                  <span class="material-symbols-outlined upload-icon">cloud_upload</span>
+                  <p class="upload-title">Kéo & thả ảnh vào đây</p>
+                  <p class="upload-sub">hoặc click để chọn tệp từ thiết bị</p>
+                  <span class="btn btn-primary btn-select">Chọn ảnh</span>
+                </div>
+                
+                <div class="upload-preview" id="upload-preview-view" style="display: none;">
+                  <img id="preview-img" src="" alt="Phiếu giao nhận">
+                  <div class="preview-actions">
+                    <button class="btn btn-secondary btn-sm" id="btn-reupload" type="button">
+                      <span class="material-symbols-outlined">refresh</span> Thay đổi ảnh
+                    </button>
+                  </div>
+                </div>
+              </label>
+              
+              <div class="form-group margin-top-md" style="display: none;">
+                <label for="ocr-model">Lựa chọn AI</label>
+                <div class="select-wrapper">
+                  <select id="ocr-model">
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                  </select>
+                </div>
+              </div>
+              
+              <button class="btn btn-primary btn-block margin-top-md" id="btn-scan" disabled>
+                <span class="material-symbols-outlined">analytics</span> Bắt đầu quét bằng AI
+              </button>
+            </div>
+            
+            <!-- Results Column / Right Side -->
+            <div class="card results-card" id="results-placeholder">
+              <div class="empty-state">
+                <span class="material-symbols-outlined empty-icon">receipt_long</span>
+                <h4>Chưa có dữ liệu trích xuất</h4>
+                <p>Hãy tải ảnh lên và chạy AI quét để xem dữ liệu ở đây.</p>
+              </div>
+            </div>
+            
+            <div class="card results-card" id="results-view" style="display: none;">
+              <div class="results-header">
+                <div class="results-meta">
+                  <h3>Kết quả trích xuất</h3>
+                  <span class="badge badge-success">Đã hoàn thành</span>
+                </div>
+                <div class="results-actions">
+                  <button class="btn btn-primary" id="btn-export-sheet">
+                    <span class="material-symbols-outlined">send_to_mobile</span> Xuất Google Sheet
+                  </button>
+                </div>
+              </div>
+              
+              <div class="slip-details-form margin-top-md">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="res-slip-no">Số phiếu (No.)</label>
+                    <input type="text" id="res-slip-no" placeholder="Ví dụ: 000442">
+                  </div>
+                  <div class="form-group flex-2">
+                    <label for="res-hotel-name">Tên khách sạn</label>
+                    <input type="text" id="res-hotel-name" placeholder="Ví dụ: Sen villa">
+                  </div>
+                  <div class="form-group">
+                    <label for="res-department">Bộ phận (Dept)</label>
+                    <input type="text" id="res-department" placeholder="Ví dụ: HK">
+                  </div>
+                </div>
+                
+                <div class="form-row margin-top-sm">
+                  <div class="form-group">
+                    <label for="res-pickup-date-ai">Ngày nhận (AI đọc)</label>
+                    <input type="text" id="res-pickup-date-ai" placeholder="Ví dụ: 30/5">
+                  </div>
+                  <div class="form-group">
+                    <label for="res-delivery-date-ai">Ngày giao (AI đọc)</label>
+                    <input type="text" id="res-delivery-date-ai" placeholder="Ví dụ: 31/5">
+                  </div>
+                  <div class="form-group flex-2">
+                    <label for="res-pickup-date">Cột Nhận dơ trong Sheets</label>
+                    <div class="select-wrapper">
+                      <select id="res-pickup-date">
+                        <!-- Filled dynamically from Google Sheet headers -->
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-group flex-2">
+                    <label for="res-delivery-date">Cột Giao sạch trong Sheets</label>
+                    <div class="select-wrapper">
+                      <select id="res-delivery-date">
+                        <!-- Filled dynamically from Google Sheet headers -->
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="table-container margin-top-md">
+                <table class="data-table" id="extracted-table">
+                  <thead>
+                    <tr>
+                      <th width="50">Mã</th>
+                      <th>Loại đồ vải (Phiếu)</th>
+                      <th>Bản đồ Sheets</th>
+                      <th width="80">Nhận dơ</th>
+                      <th width="80">Giao sạch</th>
+                      <th width="80">Nhận XL</th>
+                      <th width="80">Giao XL</th>
+                      <th>Ghi chú</th>
+                    </tr>
+                  </thead>
+                  <tbody id="extracted-rows">
+                    <!-- Rows filled dynamically -->
+                  </tbody>
+                </table>
+              </div>
+              
+              <div class="form-group margin-top-md">
+                <label for="res-notes">Ghi chú chung cuối phiếu</label>
+                <textarea id="res-notes" rows="2" placeholder="Ghi chú thêm..."></textarea>
+              </div>
+            </div>
+            
+          </div>
+        </section>
+
+        <!-- PANEL: TEACH AI / LEARN RULES -->
+        <section id="panel-learn" class="workspace-panel">
+          <div class="card">
+            <div class="card-header-with-action">
+              <div>
+                <h3>Từ điển viết tắt chữ viết tay</h3>
+                <p>Khai báo cách viết tắt của các nhân viên giao nhận để AI tự động hiểu đúng số lượng và loại đồ vải.</p>
+              </div>
+              <button class="btn btn-secondary btn-sm" id="btn-add-rule">
+                <span class="material-symbols-outlined">add</span> Thêm từ viết tắt
+              </button>
+            </div>
+            
+            <div class="rules-table-container margin-top-md">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th width="200">Ký hiệu viết tắt / Chữ khó đọc</th>
+                    <th>Nghĩa là / Quy tắc xử lý của AI</th>
+                    <th width="100">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="rules-rows">
+                  <!-- Filled dynamically -->
+                </tbody>
+              </table>
+            </div>
+            
+            <div class="form-group margin-top-lg">
+              <label for="custom-instructions">Hướng dẫn bổ sung chi tiết cho AI</label>
+              <textarea id="custom-instructions" rows="6" placeholder="Mô tả bằng tiếng Việt cách đọc các ghi chú viết tay phức tạp..."></textarea>
+              <p class="help-text">Ví dụ: Cách ghi chú nợ rách, các phép tính cộng dồn, vị trí các nhãn ghi chú phụ...</p>
+            </div>
+            
+            <div class="margin-top-md text-right">
+              <button class="btn btn-primary" id="btn-save-learn">
+                <span class="material-symbols-outlined">save</span> Lưu quy tắc dạy AI
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- PANEL: GOOGLE SHEETS CONFIGURATION -->
+        <section id="panel-config" class="workspace-panel">
+          <div class="config-grid">
+            
+            <!-- Credentials & Spreadsheet Setting -->
+            <div class="card">
+              <h3>Cấu hình kết nối</h3>
+              <p class="margin-bottom-md">Thiết lập kết nối với Google Sheet của bạn.</p>
+              
+              <div class="form-group">
+                <label for="config-gemini-key">Gemini API Key</label>
+                <input type="password" id="config-gemini-key" placeholder="Nhập API Key từ Google AI Studio">
+                <p class="help-text">Key này được lưu an toàn tại máy chủ cục bộ của bạn.</p>
+              </div>
+              
+              <div class="form-group">
+                <label for="config-apps-script-url">Google Apps Script URL (Khuyên dùng - Miễn phí & Đơn giản)</label>
+                <input type="text" id="config-apps-script-url" placeholder="Dán link Web App URL: https://script.google.com/macros/s/.../exec">
+                <p class="help-text">Phương pháp này chạy trực tiếp từ tài khoản Google của bạn, không cần cài đặt API phức tạp và hoàn toàn miễn phí.</p>
+              </div>
+              
+              <div class="form-group">
+                <label for="config-tab-name">Tên Tab (Sheet Name)</label>
+                <input type="text" id="config-tab-name" placeholder="Ví dụ: SEN VILLA">
+              </div>
+              
+              <button class="btn btn-primary margin-top-md" id="btn-save-config">
+                <span class="material-symbols-outlined">save</span> Lưu cấu hình kết nối
+              </button>
+              
+              <div class="credentials-guide margin-top-lg">
+                <h4>Hướng dẫn lấy Link Google Apps Script:</h4>
+                <div class="step-list">
+                  <div class="step-item">
+                    <span class="step-num">1</span>
+                    <p>Mở file Google Sheet của bạn. Trên menu chọn <b>Tiện ích mở rộng (Extensions)</b> &rarr; <b>Apps Script</b>.</p>
+                  </div>
+                  <div class="step-item">
+                    <span class="step-num">2</span>
+                    <p>Xóa hết mã code hiện tại trong khung chỉnh sửa, sao chép đoạn mã bên dưới và dán vào:</p>
+                  </div>
+                  <div class="form-group">
+                    <textarea id="apps-script-code" readonly rows="5" style="font-family: monospace; font-size: 0.75rem; background-color: #080c14; border-color: rgba(255,255,255,0.05); color: #a5b4fc;">function doGet(e) {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet();
+    const tabName = (e && e.parameter && e.parameter.tab) || "";
+    const targetSheet = sheet.getSheetByName(tabName) || sheet.getActiveSheet();
+    const values = targetSheet.getRange("A1:AZ200").getValues();
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      tabName: targetSheet.getName(),
+      values: values
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      error: error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doPost(e) {
+  try {
+    const payload = JSON.parse(e.postData.contents);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet();
+    if (payload.action === 'write') {
+      const targetSheet = sheet.getSheetByName(payload.tabName) || sheet.getActiveSheet();
+      payload.updates.forEach(function(update) {
+        const range = targetSheet.getRange(update.range);
+        range.setValue(update.value);
+        if (update.note) {
+          range.setNote(update.note);
+        }
+      });
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        message: "Đã ghi " + payload.updates.length + " ô thành công."
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      error: "Hành động không hợp lệ"
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      error: error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}</textarea>
+                    <button class="btn btn-secondary btn-sm margin-top-sm" type="button" id="btn-copy-script">
+                      <span class="material-symbols-outlined">content_copy</span> Sao chép mã Apps Script
+                    </button>
+                  </div>
+                  <div class="step-item">
+                    <span class="step-num">3</span>
+                    <p>Nhấn nút <b>Triển khai (Deploy)</b> (màu xanh ở góc trên bên phải) &rarr; chọn <b>Triển khai mới (New deployment)</b>.</p>
+                  </div>
+                  <div class="step-item">
+                    <span class="step-num">4</span>
+                    <p>Nhấp chọn biểu tượng bánh răng bên cạnh Loại cấu hình &rarr; chọn <b>Ứng dụng Web (Web app)</b>.</p>
+                  </div>
+                  <div class="step-item">
+                    <span class="step-num">5</span>
+                    <p>Thiết lập:
+                       <br>- Chọn <b>Thực thi dưới danh nghĩa (Execute as)</b>: <b>Tôi (Me - email của bạn)</b>.
+                       <br>- Chọn <b>Ai có quyền truy cập (Who has access)</b>: <b>Bất kỳ ai (Anyone)</b> (để phần mềm có thể ghi dữ liệu tự động).
+                    </p>
+                  </div>
+                  <div class="step-item">
+                    <span class="step-num">6</span>
+                    <p>Bấm **Triển khai (Deploy)**. Nếu Google yêu cầu cấp quyền truy cập, hãy chọn email của bạn $\rightarrow$ bấm **Advanced** $\rightarrow$ chọn **Go to Untitled project (unsafe)** và cấp quyền.</p>
+                  </div>
+                  <div class="step-item">
+                    <span class="step-num">7</span>
+                    <p>Sao chép **Đường dẫn URL ứng dụng web** nhận được và dán vào ô **Google Apps Script URL** ở trên.</p>
+                  </div>
+                </div>
+                
+                <div class="status-box margin-top-md" id="credentials-status-box" style="display: none;">
+                  <!-- We will show connection status here if they want advanced Service Account -->
+                </div>
+                
+                <!-- Advanced Service Account Option collapsed -->
+                <details class="margin-top-lg" style="font-size: 0.8rem; color: var(--text-muted);">
+                  <summary style="cursor: pointer; user-select: none;">Cấu hình nâng cao (Dành cho Google Service Account)</summary>
+                  <div class="margin-top-sm">
+                    <div class="form-group">
+                      <label for="config-sheet-id">Google Sheet ID</label>
+                      <input type="text" id="config-sheet-id" placeholder="Nhập ID từ link Google Sheet">
+                    </div>
+                    <div class="status-box margin-top-sm" id="credentials-status-box-advanced">
+                      <span class="material-symbols-outlined">info</span>
+                      <span id="credentials-status-text">Đang kiểm tra tệp credentials.json...</span>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </div>
+            
+            <!-- Items Row Mapping -->
+            <div class="card">
+              <h3>Bản đồ Ánh xạ Đồ Vải (Row Mapping)</h3>
+              <p class="margin-bottom-md">Liên kết tên loại đồ vải trên phiếu giao nhận thực tế với tên dòng tương ứng trong Google Sheet.</p>
+              
+              <div class="mapping-table-container">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Loại trên Phiếu Giao Nhận</th>
+                      <th>Tên dòng trong Google Sheet</th>
+                    </tr>
+                  </thead>
+                  <tbody id="mapping-rows">
+                    <!-- Filled dynamically -->
+                  </tbody>
+                </table>
+              </div>
+              
+              <div class="margin-top-md text-right">
+                <button class="btn btn-primary" id="btn-save-mapping">
+                  <span class="material-symbols-outlined">save</span> Lưu bản đồ ánh xạ
+                </button>
+              </div>
+            </div>
+            
+          </div>
+        </section>
+        
+      </div>
+    </main>
+  </div>
+
+  <!-- Global Loader Overlay -->
+  <div class="loader-overlay" id="loader">
+    <div class="loader-content">
+      <div class="spinner"></div>
+      <h3 id="loader-title">Đang quét phiếu...</h3>
+      <p id="loader-subtitle">AI đang phân tích ảnh và trích xuất dữ liệu. Vui lòng đợi trong giây lát.</p>
+    </div>
+  </div>
+
+  <!-- Global Toast Notification -->
+  <div class="toast-container" id="toast-container"></div>
+  <script src="app.js?v=1.0.2"></script>
+</body>
+</html>
