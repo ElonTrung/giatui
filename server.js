@@ -290,7 +290,7 @@ app.post('/api/scan', upload.single('image'), async (req, res) => {
   
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const modelName = 'gemini-2.5-flash';
+    const modelName = 'gemini-flash-latest';
     console.log('Calling Gemini model:', modelName);
     const model = genAI.getGenerativeModel({
       model: modelName,
