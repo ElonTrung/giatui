@@ -676,7 +676,8 @@ function populateMappingTable() {
     "Tấm trang trí",
     "Rèm L",
     "K. Hồ bơi đỏ",
-    "K. Hồ bơi xanh"
+    "K. Hồ bơi xanh",
+    "Khối lượng"
   ];
   
   standardReceiptItems.forEach(item => {
