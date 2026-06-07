@@ -350,7 +350,8 @@ Lưu ý quan trọng:
 1. Hãy cẩn thận phân tích chữ viết tay ở cột Nhận Hàng Dơ và Giao Hàng Sạch.
 2. Nếu cột chỉ có dấu tích (v hoặc tick), hãy để là null hoặc 0 trừ khi quy tắc chỉ ra khác.
 3. Nếu có nhãn dán màu vàng như 'vt: 19 tấm, 4 chân', hãy áp dụng quy tắc hướng dẫn đặc biệt để cộng vào các dòng tương ứng.
-4. Trả về đúng định dạng JSON và không chứa ký tự bao ngoài như \`\`\`json.`;
+4. Đối với trường "generalNotes", hãy dịch toàn bộ các từ viết tắt viết tay theo bảng tra cứu của người dùng để trả về nội dung đã được dịch đầy đủ, rõ ràng và dễ đọc (ví dụ: dịch 'Ra: 3 L + 4 N' thành 'Ra giường: 3 lớn + 4 nhỏ', 'Bọc: 4 N' thành 'Bọc: 4 nhỏ', 'vg' thành 'Vỏ gối').
+5. Trả về đúng định dạng JSON và không chứa ký tự bao ngoài như \`\`\`json.`;
 
     const result = await generateContentWithRetry(model, prompt, imagePart);
     const responseText = result.response.text();
