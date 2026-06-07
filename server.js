@@ -686,6 +686,8 @@ Lưu ý quan trọng:
       parsedData = JSON.parse(cleanJson);
     }
     
+    console.log('[Gemini Response]', JSON.stringify(parsedData, null, 2));
+    
     // Programmatic mapping of notes additions for ALL items
     try {
       parsedData = applyNotesAdditions(parsedData, activeProfile);
@@ -822,10 +824,53 @@ app.post('/api/sheets/export', async (req, res) => {
       updates.push(updateObj);
     }
     
-    // Process each item
+    // Group and aggregate items by their target row name
+    const aggregatedItems = {};
     for (const item of items) {
       const originalName = item.itemName;
       const targetName = rowMapping[originalName] || originalName;
+      
+      if (!aggregatedItems[targetName]) {
+        aggregatedItems[targetName] = {
+          targetName: targetName,
+          nhanDo: 0,
+          giaoSach: 0,
+          xuLyN: 0,
+          xuLyG: 0,
+          rachQty: 0,
+          notes: []
+        };
+      }
+      
+      if (item.nhanDo !== null && item.nhanDo !== undefined) {
+        aggregatedItems[targetName].nhanDo += parseFloat(item.nhanDo) || 0;
+      }
+      if (item.giaoSach !== null && item.giaoSach !== undefined) {
+        aggregatedItems[targetName].giaoSach += parseFloat(item.giaoSach) || 0;
+      }
+      if (item.xuLyN !== null && item.xuLyN !== undefined) {
+        aggregatedItems[targetName].xuLyN += parseFloat(item.xuLyN) || 0;
+      }
+      if (item.xuLyG !== null && item.xuLyG !== undefined) {
+        aggregatedItems[targetName].xuLyG += parseFloat(item.xuLyG) || 0;
+      }
+      
+      // Parse individual item's rách quantity if present in notes
+      if (item.notes && item.notes.toLowerCase().includes('rách')) {
+        const match = item.notes.match(/\d+/);
+        if (match) {
+          aggregatedItems[targetName].rachQty += parseInt(match[0], 10);
+        }
+      }
+      
+      if (item.notes && item.notes.trim() !== '') {
+        aggregatedItems[targetName].notes.push(`${originalName}: ${item.notes.trim()}`);
+      }
+    }
+    
+    // Process each aggregated item
+    for (const targetName of Object.keys(aggregatedItems)) {
+      const aggItem = aggregatedItems[targetName];
       
       // Find row index for targetName in Column B (index 1)
       let itemBaseIndex = -1;
@@ -838,7 +883,7 @@ app.post('/api/sheets/export', async (req, res) => {
       }
       
       if (itemBaseIndex === -1) {
-        console.warn(`Could not find row in Google Sheet for mapped item: "${targetName}" (original: "${originalName}")`);
+        console.warn(`Could not find row in Google Sheet for mapped item: "${targetName}"`);
         continue;
       }
       
@@ -883,61 +928,54 @@ app.post('/api/sheets/export', async (req, res) => {
       console.log(`[Row Mapper] Mapped "${targetName}" to Hotel row: ${mainHotelRow + 1}, Laun row: ${mainLaunRow + 1}`);
       
       // For main quantities:
-      // Let's write 'Nhận Hàng Dơ' (nhanDo) to the Pickup Date column.
-      // Let's write 'Giao Hàng Sạch' (giaoSach) to the Delivery Date column.
-      if (item.nhanDo !== null && item.nhanDo !== undefined && item.nhanDo !== 0) {
-        addUpdate(mainHotelRow, pickupColIndex, item.nhanDo);
+      if (aggItem.nhanDo > 0) {
+        addUpdate(mainHotelRow, pickupColIndex, aggItem.nhanDo);
       }
       
-      if (item.giaoSach !== null && item.giaoSach !== undefined && item.giaoSach !== 0) {
-        addUpdate(mainLaunRow, pickupColIndex, item.giaoSach);
+      if (aggItem.giaoSach > 0) {
+        addUpdate(mainLaunRow, pickupColIndex, aggItem.giaoSach);
       }
       
       // Check if we need to write "Hàng rách"
-      // Search subsequent 3 rows for "rách" in Column B
-      let rachRow = -1;
-      for (let offset = 1; offset <= 4; offset++) {
-        const checkIdx = itemBaseIndex + offset;
-        if (checkIdx < sheetRows.length && sheetRows[checkIdx]) {
-          const colB = sheetRows[checkIdx][1] || '';
-          if (colB.toLowerCase().includes('rách')) {
-            rachRow = checkIdx;
-            break;
+      if (aggItem.rachQty > 0) {
+        let rachRow = -1;
+        for (let offset = 1; offset <= 4; offset++) {
+          const checkIdx = itemBaseIndex + offset;
+          if (checkIdx < sheetRows.length && sheetRows[checkIdx]) {
+            const colB = sheetRows[checkIdx][1] || '';
+            if (colB.toLowerCase().includes('rách')) {
+              rachRow = checkIdx;
+              break;
+            }
           }
         }
-      }
-      
-      // If there is rách note or quantity, write to the delivery date column or pickup column?
-      if (rachRow !== -1 && item.notes && item.notes.toLowerCase().includes('rách')) {
-        const match = item.notes.match(/\d+/);
-        if (match) {
-          const qty = parseInt(match[0], 10);
-          addUpdate(rachRow, pickupColIndex, qty);
+        if (rachRow !== -1) {
+          addUpdate(rachRow, pickupColIndex, aggItem.rachQty);
         }
       }
       
       // Check if we need to write "Xử lý"
-      // Search subsequent 4 rows for "xử lý" in Column B
-      let xulyHotelRow = -1;
-      for (let offset = 1; offset <= 4; offset++) {
-        const checkIdx = itemBaseIndex + offset;
-        if (checkIdx < sheetRows.length && sheetRows[checkIdx]) {
-          const colB = sheetRows[checkIdx][1] || '';
-          if (colB.toLowerCase().includes('xử lý')) {
-            xulyHotelRow = checkIdx;
-            break;
+      if (aggItem.xuLyN > 0 || aggItem.xuLyG > 0) {
+        let xulyHotelRow = -1;
+        for (let offset = 1; offset <= 4; offset++) {
+          const checkIdx = itemBaseIndex + offset;
+          if (checkIdx < sheetRows.length && sheetRows[checkIdx]) {
+            const colB = sheetRows[checkIdx][1] || '';
+            if (colB.toLowerCase().includes('xử lý')) {
+              xulyHotelRow = checkIdx;
+              break;
+            }
           }
         }
-      }
-      
-      if (xulyHotelRow !== -1) {
-        const xulyLaunRow = xulyHotelRow + 1;
-        // If there's processing value
-        if (item.xuLyN !== null && item.xuLyN !== undefined && item.xuLyN !== 0) {
-          addUpdate(xulyHotelRow, pickupColIndex, item.xuLyN);
-        }
-        if (item.xuLyG !== null && item.xuLyG !== undefined && item.xuLyG !== 0) {
-          addUpdate(xulyLaunRow, pickupColIndex, item.xuLyG);
+        
+        if (xulyHotelRow !== -1) {
+          const xulyLaunRow = xulyHotelRow + 1;
+          if (aggItem.xuLyN > 0) {
+            addUpdate(xulyHotelRow, pickupColIndex, aggItem.xuLyN);
+          }
+          if (aggItem.xuLyG > 0) {
+            addUpdate(xulyLaunRow, pickupColIndex, aggItem.xuLyG);
+          }
         }
       }
     }
