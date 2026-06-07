@@ -178,6 +178,11 @@ function setupEventListeners() {
     config.activeProfile = profileName;
     syncProfileDropdowns(profileName);
     
+    // Clear previous scan results to avoid confusion across profiles
+    extractedData = null;
+    if (resultsPlaceholder) resultsPlaceholder.style.display = 'flex';
+    if (resultsView) resultsView.style.display = 'none';
+    
     showLoader(true, 'Chuyển đổi cấu hình...', 'Đang cập nhật giao diện...');
     try {
       await saveConfigRaw({ activeProfile: config.activeProfile });
@@ -185,11 +190,6 @@ function setupEventListeners() {
       populateMappingTable();
       populateRulesTable();
       showToast(`Đã chuyển sang cấu hình "${config.activeProfile}"`, 'success');
-      
-      // Re-fetch sheet dates if we already scanned a receipt
-      if (extractedData) {
-        await fetchSheetDates();
-      }
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
