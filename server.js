@@ -584,8 +584,8 @@ app.post('/api/scan', upload.single('image'), async (req, res) => {
   
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Use gemini-1.5-flash which has 1,500 requests/day limit on Free Tier
-    const modelName = 'gemini-1.5-flash';
+    // Use gemini-2.5-flash which has high rate limits (1,500 requests/day) and is fully supported
+    const modelName = 'gemini-2.5-flash';
     console.log('Calling Gemini model:', modelName);
     const model = genAI.getGenerativeModel({
       model: modelName,
