@@ -38,15 +38,29 @@ const CREDENTIALS_PATH = path.join(__dirname, 'credentials.json');
 
 // Helper: Read config
 function readConfig() {
-  if (!fs.existsSync(CONFIG_PATH)) {
-    return {};
+  let config = {};
+  if (fs.existsSync(CONFIG_PATH)) {
+    try {
+      config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    } catch (e) {
+      console.error('Error reading config:', e);
+    }
   }
-  try {
-    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-  } catch (e) {
-    console.error('Error reading config:', e);
-    return {};
+  
+  // Apply environment variable fallbacks (useful for cloud deployments like Render)
+  if (process.env.GEMINI_API_KEY && !config.geminiApiKey) {
+    config.geminiApiKey = process.env.GEMINI_API_KEY;
   }
+  if (process.env.APPS_SCRIPT_URL && !config.appsScriptUrl) {
+    config.appsScriptUrl = process.env.APPS_SCRIPT_URL;
+  }
+  if (process.env.SHEET_ID && !config.sheetId) {
+    config.sheetId = process.env.SHEET_ID;
+  }
+  if (process.env.TAB_NAME && !config.tabName) {
+    config.tabName = process.env.TAB_NAME;
+  }
+  return config;
 }
 
 // Helper: Write config
