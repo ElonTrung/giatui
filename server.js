@@ -156,6 +156,11 @@ async function generateContentWithRetry(model, prompt, imagePart, retries = 4, d
           console.warn('Failed parsing retryDelay, falling back to exponential delay:', parseErr.message);
         }
         
+        if (waitTime > 15000) {
+          console.log(`Wait time ${waitTime}ms is too long. Failing immediately to prevent HTTP timeout.`);
+          throw new Error('Tài khoản của bạn đã hết lượt quét miễn phí hôm nay (Hết hạn mức Quota của tài khoản Free). Vui lòng thử lại sau hoặc đổi API Key khác.');
+        }
+        
         console.log(`Transient Gemini error. Waiting ${waitTime}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       } else {
