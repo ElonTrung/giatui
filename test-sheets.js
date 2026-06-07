@@ -66,19 +66,58 @@ async function testConnection() {
     
     // Try to search for dates header
     let headerRowIndex = -1;
+    let dateHeaders = [];
     for (let r = 0; r < rows.length; r++) {
       const row = rows[r];
       const hasStt = row.some(cell => cell && cell.toString().toLowerCase().trim() === 'stt');
       const hasLinen = row.some(cell => cell && cell.toString().toLowerCase().trim() === 'linen');
       if (hasStt || hasLinen) {
-        headerRowIndex = r;
-        console.log(`✅ Tìm thấy dòng tiêu đề ngày tại dòng thứ ${r + 1} trong Sheets:`);
-        const dateHeaders = [];
-        for (let c = 3; c < row.length; c++) {
-          if (row[c]) {
-            dateHeaders.push(row[c].toString().trim());
+        // Evaluate the row itself, and the next 2 rows, to see which one contains the actual dates.
+        let candidateRows = [r];
+        if (r + 1 < rows.length) candidateRows.push(r + 1);
+        if (r + 2 < rows.length) candidateRows.push(r + 2);
+        
+        let maxScore = -1;
+        let bestRowIndex = -1;
+        let bestDateHeaders = [];
+        
+        for (const candidateIdx of candidateRows) {
+          const candidateRow = rows[candidateIdx];
+          let score = 0;
+          let candidateHeaders = [];
+          
+          for (let c = 3; c < candidateRow.length; c++) {
+            const cellVal = candidateRow[c];
+            if (cellVal !== undefined && cellVal !== null) {
+              const cellStr = cellVal.toString().trim();
+              if (cellStr !== '') {
+                candidateHeaders.push(cellStr);
+                
+                // Score higher for numeric day cells (1 to 31) or 'TĐ'
+                const isNum = /^\d+$/.test(cellStr);
+                const valNum = isNum ? parseInt(cellStr, 10) : null;
+                const isDay = isNum && valNum >= 1 && valNum <= 31;
+                const isTd = cellStr.toLowerCase() === 'tđ';
+                
+                if (isDay || isTd) {
+                  score += 10;
+                } else {
+                  score += 1;
+                }
+              }
+            }
+          }
+          
+          if (score > maxScore) {
+            maxScore = score;
+            bestRowIndex = candidateIdx;
+            bestDateHeaders = candidateHeaders;
           }
         }
+        
+        headerRowIndex = bestRowIndex;
+        dateHeaders = bestDateHeaders;
+        console.log(`✅ Tìm thấy dòng tiêu đề ngày tại dòng thứ ${headerRowIndex + 1} trong Sheets:`);
         console.log(`👉 Các cột ngày phát hiện được: [ ${dateHeaders.join(' | ')} ]`);
         break;
       }

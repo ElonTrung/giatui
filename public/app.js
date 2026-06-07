@@ -76,6 +76,7 @@ async function initApp() {
     hasCredentials = data.hasCredentials;
     
     updateConnectionStatus();
+    populateProfileSelectors();
     populateConfigFields();
     populateRulesTable();
     populateMappingTable();
@@ -163,6 +164,135 @@ function setupEventListeners() {
   // Save Settings Actions
   btnSaveConfig.addEventListener('click', saveConnectionConfig);
   btnSaveMapping.addEventListener('click', saveRowMappings);
+  
+  // Sync dropdown selections
+  function syncProfileDropdowns(value) {
+    const select1 = document.getElementById('config-profile-select');
+    const select2 = document.getElementById('global-profile-select');
+    if (select1) select1.value = value;
+    if (select2) select2.value = value;
+  }
+
+  // Handle Profile Change Actions
+  async function handleProfileChange(profileName) {
+    config.activeProfile = profileName;
+    syncProfileDropdowns(profileName);
+    
+    showLoader(true, 'Chuyển đổi cấu hình...', 'Đang cập nhật giao diện...');
+    try {
+      await saveConfigRaw({ activeProfile: config.activeProfile });
+      populateConfigFields();
+      populateMappingTable();
+      populateRulesTable();
+      showToast(`Đã chuyển sang cấu hình "${config.activeProfile}"`, 'success');
+      
+      // Re-fetch sheet dates if we already scanned a receipt
+      if (extractedData) {
+        await fetchSheetDates();
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      showLoader(false);
+    }
+  }
+
+  // Profile Selector & Actions Setup
+  const configProfileSelect = document.getElementById('config-profile-select');
+  if (configProfileSelect) {
+    configProfileSelect.addEventListener('change', async (e) => {
+      await handleProfileChange(e.target.value);
+    });
+  }
+  
+  const globalProfileSelect = document.getElementById('global-profile-select');
+  if (globalProfileSelect) {
+    globalProfileSelect.addEventListener('change', async (e) => {
+      await handleProfileChange(e.target.value);
+    });
+  }
+  
+  const btnCreateProfile = document.getElementById('btn-create-profile');
+  if (btnCreateProfile) {
+    btnCreateProfile.addEventListener('click', async () => {
+      const name = prompt('Nhập tên khách sạn / cấu hình mới:');
+      if (!name || name.trim() === '') return;
+      const cleanName = name.trim();
+      
+      if (config.profiles && config.profiles[cleanName]) {
+        showToast('Khách sạn này đã tồn tại!', 'error');
+        return;
+      }
+      
+      if (!config.profiles) config.profiles = {};
+      
+      // Copy current mappings as a starter template
+      const currentProfile = getActiveProfile();
+      config.profiles[cleanName] = {
+        sheetId: '',
+        tabName: 'HK',
+        appsScriptUrl: '',
+        rowMapping: { ...currentProfile.rowMapping },
+        aiRules: [ ...currentProfile.aiRules ],
+        customInstructions: currentProfile.customInstructions || '1. Nhận dạng đúng các số lượng trên phiếu.'
+      };
+      
+      config.activeProfile = cleanName;
+      
+      showLoader(true, 'Đang tạo cấu hình mới...', 'Lưu cấu hình...');
+      try {
+        await saveConfigRaw(config);
+        showToast(`Đã tạo cấu hình "${cleanName}" thành công!`, 'success');
+        populateProfileSelectors();
+        populateConfigFields();
+        populateMappingTable();
+        populateRulesTable();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        showLoader(false);
+      }
+    });
+  }
+  
+  const btnDeleteProfile = document.getElementById('btn-delete-profile');
+  if (btnDeleteProfile) {
+    btnDeleteProfile.addEventListener('click', async () => {
+      if (!config.profiles || Object.keys(config.profiles).length <= 1) {
+        showToast('Không thể xóa cấu hình duy nhất còn lại.', 'error');
+        return;
+      }
+      
+      const toDelete = config.activeProfile;
+      if (!confirm(`Bạn có chắc chắn muốn xóa cấu hình khách sạn "${toDelete}" không?`)) {
+        return;
+      }
+      
+      delete config.profiles[toDelete];
+      config.activeProfile = Object.keys(config.profiles)[0];
+      
+      showLoader(true, 'Đang xóa cấu hình...', 'Lưu thay đổi...');
+      try {
+        await saveConfigRaw(config);
+        showToast(`Đã xóa cấu hình "${toDelete}" thành công!`, 'success');
+        populateProfileSelectors();
+        populateConfigFields();
+        populateMappingTable();
+        populateRulesTable();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        showLoader(false);
+      }
+    });
+  }
+  
+  const btnAddMappingRow = document.getElementById('btn-add-mapping-row');
+  if (btnAddMappingRow) {
+    btnAddMappingRow.addEventListener('click', () => {
+      addMappingRow('', '');
+    });
+  }
   
   // Copy Apps Script Code button
   const btnCopyScript = document.getElementById('btn-copy-script');
@@ -526,17 +656,132 @@ async function exportToGoogleSheet() {
 }
 
 /* ==========================================================================
+   Profile Management Helpers
+   ========================================================================== */
+function getActiveProfile() {
+  if (!config.profiles) {
+    config.profiles = {};
+  }
+  if (!config.activeProfile) {
+    config.activeProfile = 'Sen Villa';
+  }
+  // Initialize default profile if it doesn't exist
+  if (!config.profiles[config.activeProfile]) {
+    config.profiles[config.activeProfile] = {
+      sheetId: config.sheetId || '',
+      tabName: config.tabName || 'SEN VILLA',
+      appsScriptUrl: config.appsScriptUrl || '',
+      rowMapping: config.rowMapping || {
+        "Ga giường L": "Ga Lớn",
+        "Ga giường T": "Ga over",
+        "Ga giường N": "Ga Nhỏ",
+        "Bọc L": "Bọc Lớn",
+        "Bọc T": "Bọc over",
+        "Bọc N": "Bọc Nhỏ",
+        "Bọc gối L": "Bọc gối Lớn",
+        "Bọc gối N": "Bọc gối Nhỏ",
+        "Ruột gối L": "Ruột gối Lớn",
+        "Ruột gối N": "Ruột gối Nhỏ",
+        "Khăn tắm": "Khăn tắm",
+        "Khăn tay": "Khăn tay",
+        "Khăn mặt": "Khăn mặt",
+        "Khăn chân": "Khăn chân"
+      },
+      aiRules: config.aiRules || [],
+      customInstructions: config.customInstructions || ''
+    };
+  }
+  return config.profiles[config.activeProfile];
+}
+
+function populateProfileSelectors() {
+  const configSelect = document.getElementById('config-profile-select');
+  const globalSelect = document.getElementById('global-profile-select');
+  
+  if (configSelect) configSelect.innerHTML = '';
+  if (globalSelect) globalSelect.innerHTML = '';
+  
+  if (!config.profiles) {
+    config.profiles = {};
+  }
+  
+  // Make sure at least one profile exists
+  const profileNames = Object.keys(config.profiles);
+  if (profileNames.length === 0) {
+    const defaultName = 'Sen Villa';
+    config.activeProfile = defaultName;
+    config.profiles[defaultName] = {
+      sheetId: config.sheetId || '',
+      tabName: config.tabName || 'SEN VILLA',
+      appsScriptUrl: config.appsScriptUrl || '',
+      rowMapping: config.rowMapping || {
+        "Ga giường L": "Ga Lớn",
+        "Ga giường T": "Ga over",
+        "Ga giường N": "Ga Nhỏ",
+        "Bọc L": "Bọc Lớn",
+        "Bọc T": "Bọc over",
+        "Bọc N": "Bọc Nhỏ",
+        "Bọc gối L": "Bọc gối Lớn",
+        "Bọc gối N": "Bọc gối Nhỏ",
+        "Ruột gối L": "Ruột gối Lớn",
+        "Ruột gối N": "Ruột gối Nhỏ",
+        "Khăn tắm": "Khăn tắm",
+        "Khăn tay": "Khăn tay",
+        "Khăn mặt": "Khăn mặt",
+        "Khăn chân": "Khăn chân"
+      },
+      aiRules: config.aiRules || [],
+      customInstructions: config.customInstructions || ''
+    };
+  }
+  
+  if (!config.activeProfile) {
+    config.activeProfile = Object.keys(config.profiles)[0];
+  }
+  
+  Object.keys(config.profiles).forEach(name => {
+    const optConfig = document.createElement('option');
+    optConfig.value = name;
+    optConfig.textContent = name;
+    optConfig.selected = (name === config.activeProfile);
+    if (configSelect) configSelect.appendChild(optConfig);
+    
+    const optGlobal = document.createElement('option');
+    optGlobal.value = name;
+    optGlobal.textContent = name;
+    optGlobal.selected = (name === config.activeProfile);
+    if (globalSelect) globalSelect.appendChild(optGlobal);
+  });
+}
+
+async function saveConfigRaw(updatedConfig) {
+  const res = await fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updatedConfig)
+  });
+  const result = await res.json();
+  if (res.ok && result.success) {
+    config = result.config;
+    updateConnectionStatus();
+  } else {
+    throw new Error(result.error || 'Lỗi lưu cấu hình');
+  }
+}
+
+/* ==========================================================================
    Teach AI Rules Tab
    ========================================================================== */
 function populateRulesTable() {
   rulesRows.innerHTML = '';
-  const rules = config.aiRules || [];
+  const profile = getActiveProfile();
+  const rules = profile.aiRules || [];
   
   rules.forEach((rule, idx) => {
     appendRuleRow(rule.term, rule.definition);
   });
   
-  customInstructionsText.value = config.customInstructions || '';
+  customInstructionsText.value = profile.customInstructions || '';
 }
 
 function appendRuleRow(term = '', definition = '') {
@@ -545,7 +790,7 @@ function appendRuleRow(term = '', definition = '') {
     <td><input type="text" class="rule-term" value="${term}" placeholder="Ví dụ: gt"></td>
     <td><input type="text" class="rule-def" value="${definition}" placeholder="Ví dụ: giặt thiếu (cộng vào số lượng giao sạch)"></td>
     <td>
-      <button class="btn btn-danger btn-sm btn-delete-rule">
+      <button class="btn btn-danger btn-sm btn-delete-rule" type="button">
         <span class="material-symbols-outlined">delete</span> Xóa
       </button>
     </td>
@@ -573,26 +818,15 @@ async function saveAiRules() {
   });
   
   const customInstructions = customInstructionsText.value;
+  const profile = getActiveProfile();
+  profile.aiRules = aiRules;
+  profile.customInstructions = customInstructions;
   
   showLoader(true, 'Đang lưu quy tắc AI...', 'Ghi dữ liệu học vào cấu hình cục bộ...');
   
   try {
-    const res = await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        aiRules,
-        customInstructions
-      })
-    });
-    
-    const result = await res.json();
-    if (res.ok && result.success) {
-      config = result.config;
-      showToast('Đã lưu quy tắc và hướng dẫn dạy AI thành công!', 'success');
-    } else {
-      throw new Error(result.error || 'Lỗi lưu quy tắc');
-    }
+    await saveConfigRaw({ profiles: config.profiles });
+    showToast('Đã lưu quy tắc và hướng dẫn dạy AI thành công!', 'success');
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
@@ -605,43 +839,39 @@ async function saveAiRules() {
    ========================================================================== */
 function populateConfigFields() {
   configGeminiKey.value = config.geminiApiKey || '';
-  configSheetId.value = config.sheetId || '';
-  configTabName.value = config.tabName || 'SEN VILLA';
+  
+  const profile = getActiveProfile();
+  configSheetId.value = profile.sheetId || '';
+  configTabName.value = profile.tabName || 'SEN VILLA';
   
   const configAppsScriptUrl = document.getElementById('config-apps-script-url');
   if (configAppsScriptUrl) {
-    configAppsScriptUrl.value = config.appsScriptUrl || '';
+    configAppsScriptUrl.value = profile.appsScriptUrl || '';
   }
 }
 
 async function saveConnectionConfig() {
   const geminiApiKey = configGeminiKey.value.trim();
-  const sheetId = configSheetId.value.trim();
-  const tabName = configTabName.value.trim();
-  const appsScriptUrl = document.getElementById('config-apps-script-url').value.trim();
+  const profile = getActiveProfile();
+  
+  profile.sheetId = configSheetId.value.trim();
+  profile.tabName = configTabName.value.trim();
+  
+  const configAppsScriptUrl = document.getElementById('config-apps-script-url');
+  if (configAppsScriptUrl) {
+    profile.appsScriptUrl = configAppsScriptUrl.value.trim();
+  }
+  
+  const toSave = {
+    geminiApiKey,
+    profiles: config.profiles
+  };
   
   showLoader(true, 'Đang lưu cấu hình kết nối...', 'Cập nhật khóa API và ID trang tính...');
   
   try {
-    const res = await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        geminiApiKey,
-        sheetId,
-        tabName,
-        appsScriptUrl
-      })
-    });
-    
-    const result = await res.json();
-    if (res.ok && result.success) {
-      config = result.config;
-      updateConnectionStatus();
-      showToast('Đã lưu cấu hình kết nối thành công!', 'success');
-    } else {
-      throw new Error(result.error || 'Lỗi lưu cấu hình');
-    }
+    await saveConfigRaw(toSave);
+    showToast('Đã lưu cấu hình kết nối thành công!', 'success');
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
@@ -652,78 +882,65 @@ async function saveConnectionConfig() {
 // Row Mapping Management
 function populateMappingTable() {
   mappingRows.innerHTML = '';
-  const mapping = config.rowMapping || {};
+  const profile = getActiveProfile();
+  const mapping = profile.rowMapping || {};
   
-  // Standard laundry receipt item names
-  const standardReceiptItems = [
-    "Ga giường L",
-    "Ga giường T",
-    "Ga giường N",
-    "Bọc L",
-    "Bọc T",
-    "Bọc N",
-    "Bọc gối L",
-    "Bọc gối N",
-    "Ruột gối L",
-    "Ruột gối N",
-    "Khăn tắm",
-    "Khăn tay",
-    "Khăn mặt",
-    "Khăn chân",
-    "Ruột Chăn L",
-    "Ruột Chăn N",
-    "Áo Choàng",
-    "Tấm trang trí",
-    "Rèm L",
-    "K. Hồ bơi đỏ",
-    "K. Hồ bơi xanh",
-    "Khối lượng"
-  ];
+  const items = Object.keys(mapping);
   
-  standardReceiptItems.forEach(item => {
-    const tr = document.createElement('tr');
-    const mappedValue = mapping[item] || item;
-    
-    tr.innerHTML = `
-      <td><strong>${item}</strong></td>
-      <td><input type="text" class="mapping-target" data-source="${item}" value="${mappedValue}"></td>
-    `;
-    
-    mappingRows.appendChild(tr);
+  if (items.length === 0) {
+    addMappingRow('', '');
+  } else {
+    items.forEach(item => {
+      addMappingRow(item, mapping[item]);
+    });
+  }
+}
+
+function addMappingRow(sourceVal = '', targetVal = '') {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" class="mapping-source" placeholder="Ví dụ: Ga giường L" value="${sourceVal}" style="width: 100%; background: #080c14; color: #a5b4fc; border: 1px solid rgba(255,255,255,0.05); padding: 8px; border-radius: 4px;"></td>
+    <td><input type="text" class="mapping-target" placeholder="Ví dụ: Ga Lớn" value="${targetVal}" style="width: 100%; background: #080c14; color: #a5b4fc; border: 1px solid rgba(255,255,255,0.05); padding: 8px; border-radius: 4px;"></td>
+    <td style="text-align: center;">
+      <button class="btn btn-secondary btn-sm btn-delete-row" type="button" style="background-color: rgba(239, 68, 68, 0.15); color: #ef4444; border: none; padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;">
+        <span class="material-symbols-outlined" style="font-size: 1.1rem;">delete</span>
+      </button>
+    </td>
+  `;
+  
+  const btnDelete = tr.querySelector('.btn-delete-row');
+  btnDelete.addEventListener('click', () => {
+    tr.remove();
   });
+  
+  mappingRows.appendChild(tr);
 }
 
 async function saveRowMappings() {
-  const inputs = mappingRows.querySelectorAll('.mapping-target');
+  const rows = mappingRows.querySelectorAll('tr');
   const rowMapping = {};
   
-  inputs.forEach(input => {
-    const source = input.dataset.source;
-    const target = input.value.trim();
-    if (source && target) {
-      rowMapping[source] = target;
+  rows.forEach(tr => {
+    const sourceInput = tr.querySelector('.mapping-source');
+    const targetInput = tr.querySelector('.mapping-target');
+    
+    if (sourceInput && targetInput) {
+      const source = sourceInput.value.trim();
+      const target = targetInput.value.trim();
+      if (source && target) {
+        rowMapping[source] = target;
+      }
     }
   });
+  
+  const profile = getActiveProfile();
+  profile.rowMapping = rowMapping;
   
   showLoader(true, 'Đang lưu bản đồ ánh xạ...', 'Ghi dữ liệu hàng vào tệp cấu hình...');
   
   try {
-    const res = await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        rowMapping
-      })
-    });
-    
-    const result = await res.json();
-    if (res.ok && result.success) {
-      config = result.config;
-      showToast('Đã lưu bản đồ ánh xạ thành công!', 'success');
-      populateMappingTable(); // Refresh view
-    } else {
-      throw new Error(result.error || 'Lỗi lưu ánh xạ');
-    }
+    await saveConfigRaw({ profiles: config.profiles });
+    showToast('Đã lưu bản đồ ánh xạ thành công!', 'success');
   } catch (err) {
     showToast(err.message, 'error');
   } finally {

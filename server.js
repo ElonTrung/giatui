@@ -74,6 +74,29 @@ function writeConfig(config) {
   }
 }
 
+// Helper: Get active profile from config, with fallback/migration logic
+function getActiveProfileHelper(config) {
+  if (!config.profiles) {
+    config.profiles = {};
+  }
+  
+  const activeName = config.activeProfile || 'Sen Villa';
+  
+  if (!config.profiles[activeName]) {
+    // Migrate root-level values if this is the active name, otherwise set defaults
+    config.profiles[activeName] = {
+      sheetId: config.sheetId || '',
+      tabName: config.tabName || 'SEN VILLA',
+      appsScriptUrl: config.appsScriptUrl || '',
+      rowMapping: config.rowMapping || {},
+      aiRules: config.aiRules || [],
+      customInstructions: config.customInstructions || ''
+    };
+  }
+  
+  return config.profiles[activeName];
+}
+
 // Helper: Convert Column Index to Excel Letter
 function getColumnLetter(colIndex) {
   let letter = '';
@@ -168,12 +191,13 @@ app.post('/api/config', (req, res) => {
 // Endpoint: Test / Get Date Columns from Google Sheets
 app.get('/api/sheets/dates', async (req, res) => {
   const config = readConfig();
-  const appsScriptUrl = config.appsScriptUrl;
-  const sheetId = config.sheetId;
-  const tabName = req.query.tab || config.tabName || 'SEN VILLA';
+  const activeProfile = getActiveProfileHelper(config);
+  const appsScriptUrl = activeProfile.appsScriptUrl;
+  const sheetId = activeProfile.sheetId;
+  const tabName = req.query.tab || activeProfile.tabName || 'SEN VILLA';
   
   if (!appsScriptUrl && !sheetId) {
-    return res.status(400).json({ error: 'Chưa cấu hình Google Sheet ID hoặc Apps Script URL.' });
+    return res.status(400).json({ error: 'Chưa cấu hình Google Sheet ID hoặc Apps Script URL cho cấu hình đang chọn.' });
   }
   
   let rows = [];
@@ -310,7 +334,7 @@ app.get('/api/sheets/dates', async (req, res) => {
 });
 
 // Helper to programmatically apply additions parsed from general notes by Gemini AI to clean quantities (giaoSach)
-function applyNotesAdditions(data) {
+function applyNotesAdditions(data, activeProfile) {
   if (!data || !data.items || !Array.isArray(data.items)) return data;
   
   const additions = data.notesAdditions;
@@ -358,6 +382,28 @@ function applyNotesAdditions(data) {
           notes: `+${qty}kg từ ghi chú`
         });
         console.log(`[Notes Additions] Created new Khối lượng item with value: ${qty}`);
+      } else if (activeProfile) {
+        // Check if item exists in the active rowMapping keys (case-insensitive)
+        const allowedKeys = Object.keys(activeProfile.rowMapping || {});
+        const matchedKey = allowedKeys.find(k => k.toLowerCase().trim() === targetName.toLowerCase().trim());
+        
+        if (matchedKey) {
+          const maxCode = data.items.reduce((max, it) => (it.code && it.code > max ? it.code : max), 0);
+          data.items.push({
+            code: maxCode + 1,
+            itemName: matchedKey,
+            nhanDo: null,
+            giaoSach: qty,
+            tonDau: null,
+            tonCuoi: null,
+            xuLyN: null,
+            xuLyG: null,
+            notes: `+${qty} từ ghi chú`
+          });
+          console.log(`[Notes Additions] Dynamically created mapped item "${matchedKey}" from notes with value: ${qty}`);
+        } else {
+          console.warn(`[Notes Additions] Could not find item "${targetName}" in scanned list or mapping keys.`);
+        }
       } else {
         console.warn(`[Notes Additions] Could not find item "${targetName}" in the parsed list.`);
       }
@@ -519,6 +565,7 @@ app.post('/api/scan', upload.single('image'), async (req, res) => {
   }
   
   const config = readConfig();
+  const activeProfile = getActiveProfileHelper(config);
   let apiKey = process.env.GEMINI_API_KEY;
   
   // If the env key is missing or is the default template placeholder, fallback to config key
@@ -550,41 +597,40 @@ app.post('/api/scan', upload.single('image'), async (req, res) => {
     
     // Build Prompt with AI learning rules
     let rulesText = '';
-    if (config.aiRules && config.aiRules.length > 0) {
+    if (activeProfile.aiRules && activeProfile.aiRules.length > 0) {
       rulesText += '\nBảng tra cứu viết tắt viết tay từ người dùng:\n';
-      config.aiRules.forEach(r => {
+      activeProfile.aiRules.forEach(r => {
         rulesText += `- Từ viết tắt '${r.term}' có nghĩa là: ${r.definition}\n`;
       });
     }
-    if (config.customInstructions) {
-      rulesText += `\nHướng dẫn đặc biệt bổ sung:\n${config.customInstructions}\n`;
+    if (activeProfile.customInstructions) {
+      rulesText += `\nHướng dẫn đặc biệt bổ sung:\n${activeProfile.customInstructions}\n`;
+    }
+    
+    // Build allowed items list dynamically from active profile's rowMapping keys
+    const allowedItems = Object.keys(activeProfile.rowMapping || {});
+    let itemsListText = '';
+    if (allowedItems.length > 0) {
+      itemsListText = allowedItems.map(item => `- ${item}`).join('\n');
+    } else {
+      // Fallback default items list if empty
+      itemsListText = [
+        "Ga giường L", "Ga giường T", "Ga giường N",
+        "Bọc L", "Bọc T", "Bọc N",
+        "Bọc gối L", "Bọc gối N",
+        "Ruột gối L", "Ruột gối N",
+        "Khăn tắm", "Khăn tay", "Khăn mặt", "Khăn chân",
+        "Ruột Chăn L", "Ruột Chăn N",
+        "Áo Choàng", "Tấm trang trí", "Rèm L",
+        "K. Hồ bơi đỏ", "K. Hồ bơi xanh"
+      ].map(item => `- ${item}`).join('\n');
     }
     
     const prompt = `Bạn là chuyên gia số hóa phiếu giao nhận đồ vải (laundry receipt parser).
 Nhiệm vụ của bạn là đọc hình ảnh phiếu giao nhận này, nhận dạng chữ viết tay và chữ in để xuất ra dữ liệu JSON chính xác.
 
 Tên gốc loại đồ vải (itemName) trong danh sách "items" và "notesAdditions" PHẢI khớp với một trong các tên chuẩn sau đây:
-- Ga giường L
-- Ga giường T
-- Ga giường N
-- Bọc L
-- Bọc T
-- Bọc N
-- Bọc gối L
-- Bọc gối N
-- Ruột gối L
-- Ruột gối N
-- Khăn tắm
-- Khăn tay
-- Khăn mặt
-- Khăn chân
-- Ruột Chăn L
-- Ruột Chăn N
-- Áo Choàng
-- Tấm trang trí
-- Rèm L
-- K. Hồ bơi đỏ
-- K. Hồ bơi xanh
+${itemsListText}
 
 ${rulesText}
 
@@ -642,7 +688,7 @@ Lưu ý quan trọng:
     
     // Programmatic mapping of notes additions for ALL items
     try {
-      parsedData = applyNotesAdditions(parsedData);
+      parsedData = applyNotesAdditions(parsedData, activeProfile);
     } catch (addErr) {
       console.error('Error applying notes additions:', addErr);
     }
@@ -682,16 +728,17 @@ Lưu ý quan trọng:
 // Endpoint: Export to Google Sheets
 app.post('/api/sheets/export', async (req, res) => {
   const config = readConfig();
-  const appsScriptUrl = config.appsScriptUrl;
-  const sheetId = config.sheetId;
+  const activeProfile = getActiveProfileHelper(config);
+  const appsScriptUrl = activeProfile.appsScriptUrl;
+  const sheetId = activeProfile.sheetId;
   
   if (!appsScriptUrl && !sheetId) {
-    return res.status(400).json({ error: 'Chưa cấu hình Google Sheet ID hoặc Apps Script URL.' });
+    return res.status(400).json({ error: 'Chưa cấu hình Google Sheet ID hoặc Apps Script URL cho cấu hình đang hoạt động.' });
   }
   
   const { items, pickupColIndex, deliveryColIndex, metadata } = req.body;
   
-  let tabName = config.tabName || 'SEN VILLA';
+  let tabName = activeProfile.tabName || 'SEN VILLA';
   if (metadata && metadata.department && metadata.department.trim() !== '') {
     tabName = metadata.department.trim().toUpperCase();
   }
@@ -739,7 +786,7 @@ app.post('/api/sheets/export', async (req, res) => {
     }
     
     // Mapping config
-    const rowMapping = config.rowMapping || {};
+    const rowMapping = activeProfile.rowMapping || {};
     
     // Create updates array
     const updates = [];

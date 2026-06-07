@@ -58,6 +58,15 @@
           <h2 id="page-title">Quét Phiếu Giao Nhận</h2>
           <p id="page-subtitle">Tải ảnh chụp phiếu lên để AI tự động trích xuất bảng số liệu</p>
         </div>
+        <div class="header-profile-selector" style="display: inline-flex; align-items: center; gap: 8px; background: var(--bg-card); padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); backdrop-filter: blur(8px);">
+          <span class="material-symbols-outlined" style="color: var(--primary); font-size: 1.2rem;">hotel</span>
+          <label for="global-profile-select" style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); white-space: nowrap; margin-right: 4px;">Khách sạn:</label>
+          <div class="select-wrapper" style="margin-bottom: 0;">
+            <select id="global-profile-select" style="background: #080c14; color: #a5b4fc; border: 1px solid rgba(255,255,255,0.05); padding: 6px 36px 6px 12px; border-radius: 4px; font-size: 0.9rem; min-width: 160px; width: auto;">
+              <!-- Loaded dynamically -->
+            </select>
+          </div>
+        </div>
       </header>
 
       <!-- PANELS CONTAINER -->
@@ -248,6 +257,30 @@
         <section id="panel-config" class="workspace-panel">
           <div class="config-grid">
             
+            <!-- Hotel Profile Switcher -->
+            <div class="card" style="grid-column: 1 / -1;">
+              <h3>Quản lý Khách sạn (Cấu hình)</h3>
+              <p class="margin-bottom-md">Tạo mới và chuyển đổi cấu hình riêng của từng khách sạn để lưu bản đồ ánh xạ và cài đặt kết nối riêng biệt.</p>
+              
+              <div style="display: flex; gap: var(--space-md); align-items: flex-end; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1; min-width: 250px; margin-bottom: 0;">
+                  <label for="config-profile-select">Khách sạn đang cấu hình:</label>
+                  <select id="config-profile-select" style="width: 100%; background: #080c14; color: #a5b4fc; border: 1px solid rgba(255,255,255,0.05); padding: 10px 12px; border-radius: 4px; font-size: 0.9rem;">
+                    <!-- Profiles loaded dynamically -->
+                  </select>
+                </div>
+                
+                <div style="display: flex; gap: var(--space-sm);">
+                  <button class="btn btn-secondary" id="btn-create-profile" type="button">
+                    <span class="material-symbols-outlined">add</span> Thêm khách sạn
+                  </button>
+                  <button class="btn btn-secondary" id="btn-delete-profile" type="button" style="background-color: rgba(239, 68, 68, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.2);">
+                    <span class="material-symbols-outlined">delete</span> Xóa khách sạn
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <!-- Credentials & Spreadsheet Setting -->
             <div class="card">
               <h3>Cấu hình kết nối</h3>
@@ -395,6 +428,7 @@ function doPost(e) {
                     <tr>
                       <th>Loại trên Phiếu Giao Nhận</th>
                       <th>Tên dòng trong Google Sheet</th>
+                      <th style="width: 80px; text-align: center;">Xóa</th>
                     </tr>
                   </thead>
                   <tbody id="mapping-rows">
@@ -403,7 +437,10 @@ function doPost(e) {
                 </table>
               </div>
               
-              <div class="margin-top-md text-right">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-md);">
+                <button class="btn btn-secondary btn-sm" id="btn-add-mapping-row" type="button">
+                  <span class="material-symbols-outlined">add_circle</span> Thêm dòng mới
+                </button>
                 <button class="btn btn-primary" id="btn-save-mapping">
                   <span class="material-symbols-outlined">save</span> Lưu bản đồ ánh xạ
                 </button>
